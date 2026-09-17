@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+<!-- Monomoy Revit 2026 deployment -->
   <PropertyGroup>
     <RevitYear Condition="'$(RevitYear)' == ''">2026</RevitYear>
     <TargetFramework Condition="'$(RevitYear)' == '2027'">net10.0</TargetFramework>
