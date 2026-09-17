@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <RevitYear Condition="'$(RevitYear)' == ''">2027</RevitYear>
+    <RevitYear Condition="'$(RevitYear)' == ''">2026</RevitYear>
     <TargetFramework Condition="'$(RevitYear)' == '2027'">net10.0</TargetFramework>
     <TargetFramework Condition="'$(RevitYear)' != '2027'">net8.0</TargetFramework>
     <DefineConstants>$(DefineConstants);REVIT$(RevitYear)</DefineConstants>
