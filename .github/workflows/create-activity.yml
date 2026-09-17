@@ -1,0 +1,102 @@
+name: Create Revit 2026 Activity
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create-activity:
+    runs-on: ubuntu-latest
+
+    env:
+      APS_CLIENT_ID: ${{ secrets.APS_CLIENT_ID }}
+      APS_CLIENT_SECRET: ${{ secrets.APS_CLIENT_SECRET }}
+      DA_BASE_URL: https://developer.api.autodesk.com/da/us-east/v3
+
+    steps:
+
+      - name: Get APS access token
+        run: |
+          RESPONSE=$(curl -s -X POST \
+            "https://developer.api.autodesk.com/authentication/v2/token" \
+            -H "Authorization: Basic $(printf '%s' "$APS_CLIENT_ID:$APS_CLIENT_SECRET" | base64 -w 0)" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "grant_type=client_credentials&scope=code:all")
+
+          TOKEN=$(echo "$RESPONSE" | jq -r '.access_token')
+
+          if [ "$TOKEN" = "null" ] || [ -z "$TOKEN" ]; then
+            echo "Could not get APS token"
+            exit 1
+          fi
+
+          echo "::add-mask::$TOKEN"
+          echo "APS_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Get APS nickname
+        run: |
+          RESPONSE=$(curl -s \
+            "$DA_BASE_URL/forgeapps/me" \
+            -H "Authorization: Bearer $APS_TOKEN")
+
+          NICKNAME=$(echo "$RESPONSE" | jq -r 'if type=="object" then .nickname elif type=="string" then . else empty end')
+
+          if [ -z "$NICKNAME" ]; then
+            echo "Could not determine APS nickname"
+            exit 1
+          fi
+
+          echo "NICKNAME=$NICKNAME" >> "$GITHUB_ENV"
+
+      - name: Create Revit 2026 Activity
+        run: |
+          PAYLOAD=$(jq -n \
+            --arg id "RevitMcpToolsActivity2026" \
+            --arg engine "Autodesk.Revit+2026" \
+            --arg appbundle "$NICKNAME.RevitMcpTools2026+prod" \
+            --arg command '$(engine.path)\RevitCoreConsole.exe /al "$(appbundles[RevitMcpTools2026].path)"' \
+            '{
+              id: $id,
+              description: "Monomoy Revit MCP Tools for Revit 2026",
+              engine: $engine,
+              commandLine: [$command],
+              parameters: {
+                revitmodel: {
+                  verb: "get",
+                  localName: "revitmodel.json"
+                },
+                toolinputs: {
+                  verb: "get",
+                  localName: "toolinputs.json"
+                }
+              },
+              appbundles: [$appbundle],
+              settings: {}
+            }')
+
+          RESPONSE=$(curl -s -X POST \
+            "$DA_BASE_URL/activities" \
+            -H "Authorization: Bearer $APS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          echo "$RESPONSE" | jq .
+
+          VERSION=$(echo "$RESPONSE" | jq -r '.version')
+
+          if [ "$VERSION" = "null" ] || [ -z "$VERSION" ]; then
+            echo "Activity creation failed"
+            exit 1
+          fi
+
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Create production alias
+        run: |
+          curl -f -s -X POST \
+            "$DA_BASE_URL/activities/RevitMcpToolsActivity2026/aliases" \
+            -H "Authorization: Bearer $APS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"id\":\"prod\",\"version\":$VERSION}"
+
+          echo "Activity created:"
+          echo "$NICKNAME.RevitMcpToolsActivity2026+prod"
